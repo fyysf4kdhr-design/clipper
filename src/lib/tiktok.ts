@@ -1,17 +1,17 @@
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 
 export const TT_SCOPE = "user.info.basic,video.upload,video.publish";
 
 /**
- * Mode is environment-driven: with TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET
- * present we run the real Content Posting API flow ("live"); without them we
- * run a faithful end-to-end simulation ("sandbox") so the product still works.
+ * TikTok publishing is enabled only when real API credentials are configured.
  */
 export function getTikTokConfig() {
   const clientKey = process.env.TIKTOK_CLIENT_KEY ?? "";
   const clientSecret = process.env.TIKTOK_CLIENT_SECRET ?? "";
   return {
-    mode: (clientKey && clientSecret ? "live" : "sandbox") as "live" | "sandbox",
+    mode: (clientKey && clientSecret ? "live" : "unavailable") as
+      | "live"
+      | "unavailable",
     clientKey,
     clientSecret,
   };
@@ -127,11 +127,3 @@ export async function liveStatusCheck(accessToken: string, publishId: string) {
   return (data?.data?.status ?? "FAILED") as string;
 }
 
-/** Deterministic 19-digit TikTok-style video id for sandbox posts. */
-export function sandboxVideoId(seed: string): string {
-  const hex = createHash("sha256").update(`tt:${seed}`).digest("hex");
-  const span = BigInt("9000000000000000000");
-  const base = BigInt("1000000000000000000");
-  const n = (BigInt("0x" + hex.slice(0, 15)) % span) + base;
-  return n.toString();
-}

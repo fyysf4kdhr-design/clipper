@@ -53,7 +53,7 @@ export default function TikTokDialog({
   onClose: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
-  const [mode, setMode] = useState<"sandbox" | "live">("sandbox");
+  const [mode, setMode] = useState<"live" | "unavailable">("unavailable");
   const [conn, setConn] = useState<ConnectionView | null>(null);
   const [loadingConn, setLoadingConn] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -71,7 +71,7 @@ export default function TikTokDialog({
       .then((r) => r.json())
       .then((d) => {
         setConn(d.connection ?? null);
-        setMode(d.mode ?? "sandbox");
+        setMode(d.mode ?? "unavailable");
         setLoadingConn(false);
       })
       .catch(() => setLoadingConn(false));
@@ -196,7 +196,7 @@ export default function TikTokDialog({
             <div>
               <p className="text-sm font-semibold">Post to TikTok</p>
               <p className="font-mono text-[10px] uppercase tracking-widest text-mute">
-                {mode === "live" ? "content posting api — live" : "sandbox mode"}
+                {mode === "live" ? "content posting api — live" : "live posting unavailable"}
               </p>
             </div>
           </div>
@@ -236,11 +236,11 @@ export default function TikTokDialog({
               <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-cream-2">
                 {mode === "live"
                   ? "Authorize KLYP with the TikTok Content Posting API to upload clips straight to your account."
-                  : "No TikTok API keys detected — KLYP runs in sandbox mode and simulates the full upload pipeline end to end."}
+                  : "Configure TikTok API credentials to authorize an account and publish real videos."}
               </p>
               <button
                 onClick={connect}
-                disabled={connecting}
+                disabled={connecting || mode !== "live"}
                 className="btn-acid mx-auto mt-6 h-11 px-6 text-sm"
               >
                 {connecting ? (
@@ -248,12 +248,12 @@ export default function TikTokDialog({
                 ) : (
                   <TikTokIcon className="size-4" />
                 )}
-                {mode === "live" ? "Authorize with TikTok" : "Connect sandbox account"}
+                {mode === "live" ? "Authorize with TikTok" : "TikTok unavailable"}
               </button>
               <p className="mt-4 font-mono text-[10px] uppercase tracking-widest text-mute">
                 {mode === "live"
                   ? "scope: user.info.basic, video.upload, video.publish"
-                  : "set TIKTOK_CLIENT_KEY + SECRET to go live"}
+                  : "configure TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET"}
               </p>
             </div>
           ) : job && job.status === "posted" ? (
@@ -340,11 +340,6 @@ export default function TikTokDialog({
                 <TikTokIcon className="size-3.5 text-[#25F4EE]" />
                 <span className="text-xs text-cream-2">
                   posting as <span className="font-medium text-cream">{conn.handle}</span>
-                  {conn.mode === "sandbox" && (
-                    <span className="ml-1 font-mono text-[9px] uppercase tracking-widest text-[#FE2C55]">
-                      sandbox
-                    </span>
-                  )}
                 </span>
               </div>
 

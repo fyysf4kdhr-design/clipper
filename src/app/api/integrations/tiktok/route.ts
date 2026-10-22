@@ -25,20 +25,13 @@ export async function POST() {
     );
   }
 
-  let conn = await getActiveConnection();
-  if (!conn) {
-    const [created] = await db
-      .insert(connections)
-      .values({
-        platform: "tiktok",
-        handle: "@creator.klyp",
-        displayName: "KLYP Creator",
-        mode: "sandbox",
-      })
-      .returning();
-    conn = created;
-  }
-  return NextResponse.json({ mode, connection: serializeConnection(conn) });
+  return NextResponse.json(
+    {
+      error: "tiktok_not_configured",
+      message: "Configure TikTok API credentials to enable live publishing.",
+    },
+    { status: 503 },
+  );
 }
 
 export async function DELETE() {

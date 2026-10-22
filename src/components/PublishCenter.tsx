@@ -62,7 +62,7 @@ export default function PublishCenter({
 }: {
   initialConnection: ConnectionView | null;
   initialJobs: JobView[];
-  mode: "live" | "sandbox";
+  mode: "live" | "unavailable";
   justConnected: boolean;
   oauthError: string | null;
 }) {
@@ -226,11 +226,6 @@ export default function PublishCenter({
               </div>
             </div>
             <div className="flex items-center gap-2.5 sm:ml-auto">
-              {mode === "sandbox" && (
-                <span className="max-w-[220px] font-mono text-[10px] leading-snug text-mute">
-                  no TIKTOK_CLIENT_KEY set — uploads are simulated
-                </span>
-              )}
               <button
                 onClick={disconnect}
                 disabled={busy === "disconnect"}
@@ -256,13 +251,13 @@ export default function PublishCenter({
                 <p className="font-mono text-xs text-mute">
                   {mode === "live"
                     ? "oauth ready — authorize to start posting"
-                    : "connect the sandbox account to simulate uploads"}
+                    : "configure TikTok API credentials to enable live posting"}
                 </p>
               </div>
             </div>
             <button
               onClick={connect}
-              disabled={connecting}
+              disabled={connecting || mode !== "live"}
               className="btn-acid h-11 px-6 text-sm sm:ml-auto"
             >
               {connecting ? (
@@ -270,7 +265,7 @@ export default function PublishCenter({
               ) : (
                 <TikTokIcon className="size-4" />
               )}
-              {mode === "live" ? "Authorize with TikTok" : "Connect TikTok"}
+              {mode === "live" ? "Authorize with TikTok" : "TikTok unavailable"}
             </button>
           </>
         )}

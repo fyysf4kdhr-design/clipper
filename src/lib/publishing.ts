@@ -8,7 +8,7 @@ import {
   type Connection,
   type PublishJob,
 } from "@/db/schema";
-import { liveStatusCheck, sandboxVideoId, getTikTokConfig } from "./tiktok";
+import { liveStatusCheck, getTikTokConfig } from "./tiktok";
 
 const ACTIVE_STATUSES = ["queued", "uploading"];
 
@@ -61,16 +61,14 @@ export async function getActiveConnection(): Promise<Connection | null> {
   const [c] = await db
     .select()
     .from(connections)
-    .where(eq(connections.platform, "tiktok"))
+    .where(and(eq(connections.platform, "tiktok"), eq(connections.mode, "live")))
     .orderBy(desc(connections.createdAt))
     .limit(1);
   return c ?? null;
 }
 
 /**
- * Move a publish job along its lifecycle.
- * Sandbox: time-based simulation — queue 3s → upload ~11s → posted, with a
- * deterministic TikTok-style URL. Live: queries the Content Posting API.
+ * Move a publish job along its live TikTok publishing lifecycle.
  */
 export async function advanceJob(
   job: PublishJob,
@@ -91,87 +89,54 @@ export async function advanceJob(
     return j ?? job;
   }
 
-  if (connection.mode === "live") {
-    if (!job.publishId || !connection.accessToken) return job;
-    try {
-      const remote = await liveStatusCheck(connection.accessToken, job.publishId);
-      if (remote === "PUBLISH_COMPLETE") {
-        const [j] = await db
-          .update(publishJobs)
-          .set({
-            status: "posted",
-            progress: 100,
-            remoteUrl: `https://www.tiktok.com/${connection.handle}/video/${job.publishId}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(publishJobs.id, job.id))
-          .returning();
-        return j ?? job;
-      }
-      if (remote === "FAILED") {
-        const [j] = await db
-          .update(publishJobs)
-          .set({
-            status: "failed",
-            error: "TikTok rejected the upload.",
-            updatedAt: new Date(),
-          })
-          .where(eq(publishJobs.id, job.id))
-          .returning();
-        return j ?? job;
-      }
-      const progress = remote === "SEND_TO_USER_INBOX" ? 96 : 60;
-      if (progress !== job.progress || job.status !== "uploading") {
-        const [j] = await db
-          .update(publishJobs)
-          .set({ status: "uploading", progress, updatedAt: new Date() })
-          .where(eq(publishJobs.id, job.id))
-          .returning();
-        return j ?? job;
-      }
-    } catch {
-      /* transient — try again next poll */
-    }
-    return job;
-  }
-
-  // --- sandbox simulation ---
-  const now = Date.now();
-  if (job.scheduledFor && now < new Date(job.scheduledFor).getTime()) {
-    return job; // still waiting for its slot
-  }
-  const elapsed = now - new Date(job.createdAt).getTime();
-  let status = job.status;
-  let progress = job.progress;
-  let publishId = job.publishId;
-  let remoteUrl = job.remoteUrl;
-
-  if (elapsed >= 14000) {
-    status = "posted";
-    progress = 100;
-    publishId = publishId ?? sandboxVideoId(job.id);
-    remoteUrl =
-      remoteUrl ?? `https://www.tiktok.com/${connection.handle}/video/${publishId}`;
-  } else if (elapsed >= 3000) {
-    status = "uploading";
-    progress = Math.min(98, Math.max(8, Math.round(((elapsed - 3000) / 11000) * 100)));
-    publishId = publishId ?? sandboxVideoId(job.id);
-  } else {
-    status = "queued";
-    progress = Math.max(progress, 2);
-  }
-
-  if (
-    status !== job.status ||
-    progress !== job.progress ||
-    publishId !== job.publishId
-  ) {
+  if (connection.mode !== "live") {
     const [j] = await db
       .update(publishJobs)
-      .set({ status, progress, publishId, remoteUrl, updatedAt: new Date() })
+      .set({ status: "failed", error: "TikTok connection is not live.", updatedAt: new Date() })
       .where(eq(publishJobs.id, job.id))
       .returning();
     return j ?? job;
+  }
+
+  if (!job.publishId || !connection.accessToken) return job;
+  try {
+    const remote = await liveStatusCheck(connection.accessToken, job.publishId);
+    if (remote === "PUBLISH_COMPLETE") {
+      const [j] = await db
+        .update(publishJobs)
+        .set({
+          status: "posted",
+          progress: 100,
+          remoteUrl: `https://www.tiktok.com/${connection.handle}/video/${job.publishId}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(publishJobs.id, job.id))
+        .returning();
+      return j ?? job;
+    }
+    if (remote === "FAILED") {
+      const [j] = await db
+        .update(publishJobs)
+        .set({
+          status: "failed",
+          error: "TikTok rejected the upload.",
+          updatedAt: new Date(),
+        })
+        .where(eq(publishJobs.id, job.id))
+        .returning();
+      return j ?? job;
+    }
+    const progress = remote === "SEND_TO_USER_INBOX" ? 96 : 60;
+    if (progress !== job.progress || job.status !== "uploading") {
+      const [j] = await db
+        .update(publishJobs)
+        .set({ status: "uploading", progress, updatedAt: new Date() })
+        .where(eq(publishJobs.id, job.id))
+        .returning();
+      return j ?? job;
+    }
+  } catch {
+    /* transient — try again next poll */
   }
   return job;
 }
@@ -254,7 +219,7 @@ function serializeJobRow(
 /** Shared by the publish API route and the /publish page. */
 export async function listPublishData(): Promise<{
   connection: ConnectionView | null;
-  mode: "live" | "sandbox";
+  mode: "live" | "unavailable";
   jobs: JobView[];
 }> {
   const conn = await getActiveConnection();

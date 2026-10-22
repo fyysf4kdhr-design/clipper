@@ -21,7 +21,7 @@ export const connections = pgTable("connections", {
   handle: text("handle").notNull(),
   displayName: text("display_name"),
   avatarUrl: text("avatar_url"),
-  mode: varchar("mode", { length: 8 }).notNull().default("sandbox"), // sandbox | live
+  mode: varchar("mode", { length: 8 }).notNull().default("live"),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   createdAt: timestamp("created_at", { withTimezone: true })

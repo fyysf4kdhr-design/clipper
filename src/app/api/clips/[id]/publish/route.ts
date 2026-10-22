@@ -20,6 +20,13 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
+  if (getTikTokConfig().mode !== "live") {
+    return NextResponse.json(
+      { error: "tiktok_not_configured", message: "Configure TikTok API credentials to enable live publishing." },
+      { status: 503 },
+    );
+  }
+
   const [clip] = await db.select().from(clips).where(eq(clips.id, id));
   if (!clip) {
     return NextResponse.json({ error: "Clip not found" }, { status: 404 });
@@ -30,6 +37,14 @@ export async function POST(
     return NextResponse.json(
       { error: "not_connected", message: "Connect a TikTok account first." },
       { status: 409 },
+    );
+  }
+
+  const renderBaseUrl = process.env.RENDER_BASE_URL;
+  if (!renderBaseUrl) {
+    return NextResponse.json(
+      { error: "renderer_not_configured", message: "Configure RENDER_BASE_URL to provide a public rendered MP4 for TikTok." },
+      { status: 503 },
     );
   }
 
@@ -97,39 +112,28 @@ export async function POST(
     })
     .returning();
 
-  // Live mode: initialize the real upload immediately.
-  if (getTikTokConfig().mode === "live" && conn.mode === "live") {
-    try {
-      const base = process.env.RENDER_BASE_URL;
-      if (!base) {
-        throw new Error(
-          "No rendered MP4 exists for this clip yet (KLYP cuts timestamps, not files). Point RENDER_BASE_URL at your render service, or run without TikTok keys to use sandbox mode.",
-        );
-      }
-      const publishId = await liveInitPost(conn.accessToken ?? "", {
-        title: `${caption} ${hashtags.map((h) => `#${h}`).join(" ")}`.slice(
-          0,
-          2200,
-        ),
-        privacyLevel,
-        videoUrl: `${base.replace(/\/$/, "")}/${clip.id}.mp4`,
-      });
-      const [updated] = await db
-        .update(publishJobs)
-        .set({ publishId, status: "uploading", progress: 50, updatedAt: new Date() })
-        .where(eq(publishJobs.id, job.id))
-        .returning();
-      return NextResponse.json({ job: updated }, { status: 201 });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "publish init failed";
-      const [failed] = await db
-        .update(publishJobs)
-        .set({ status: "failed", error: message, updatedAt: new Date() })
-        .where(eq(publishJobs.id, job.id))
-        .returning();
-      return NextResponse.json({ job: failed }, { status: 201 });
-    }
+  try {
+    const publishId = await liveInitPost(conn.accessToken ?? "", {
+      title: `${caption} ${hashtags.map((h) => `#${h}`).join(" ")}`.slice(
+        0,
+        2200,
+      ),
+      privacyLevel,
+      videoUrl: `${renderBaseUrl.replace(/\/$/, "")}/${clip.id}.mp4`,
+    });
+    const [updated] = await db
+      .update(publishJobs)
+      .set({ publishId, status: "uploading", progress: 50, updatedAt: new Date() })
+      .where(eq(publishJobs.id, job.id))
+      .returning();
+    return NextResponse.json({ job: updated }, { status: 201 });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "publish init failed";
+    const [failed] = await db
+      .update(publishJobs)
+      .set({ status: "failed", error: message, updatedAt: new Date() })
+      .where(eq(publishJobs.id, job.id))
+      .returning();
+    return NextResponse.json({ job: failed }, { status: 201 });
   }
-
-  return NextResponse.json({ job }, { status: 201 });
 }

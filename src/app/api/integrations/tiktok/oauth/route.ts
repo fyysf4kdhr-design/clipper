@@ -9,8 +9,7 @@ export async function GET(req: NextRequest) {
   const origin = req.nextUrl.origin;
 
   if (mode !== "live") {
-    // Nothing to authorize in sandbox mode — connect is instant.
-    return NextResponse.redirect(`${origin}/publish`);
+    return NextResponse.redirect(`${origin}/publish?error=tiktok_unconfigured`);
   }
 
   const state = newOAuthState();

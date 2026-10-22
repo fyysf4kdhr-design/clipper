@@ -2,7 +2,6 @@
 
 KLYP is a standard Next.js 16 + PostgreSQL app. Pick one of three ways to run it in production.
 
----
 
 ## Option A — Docker Compose (recommended)
 
@@ -34,7 +33,6 @@ docker compose down -v         # stop + wipe the database
 
 The app listens on `APP_PORT` (default 3000); the DB is exposed on `DB_PORT` (5432) for tools — remove that `ports:` block if you don't need external DB access.
 
----
 
 ## Option B — Bare-metal VPS (PM2 or systemd)
 
@@ -66,25 +64,23 @@ sudo systemctl enable --now klyp
 sudo certbot --nginx -d klyp.example.com
 ```
 
----
 
 ## Option C — Platform-as-a-Service
 
 Any Node host that supports `npm run build && npm start` plus a `DATABASE_URL` works (Railway, Render, Fly.io, etc.). Set the env var, provision a Postgres addon, and run `npx drizzle-kit push` once.
 
----
 
 ## Environment variables
 
 | Variable                | Required | Purpose                                                        |
 | ----------------------- | -------- | -------------------------------------------------------------- |
 | `DATABASE_URL`          | ✅       | PostgreSQL connection string                                    |
-| `TIKTOK_CLIENT_KEY`     | optional | Enables **live** TikTok mode (OAuth + Content Posting API)      |
-| `TIKTOK_CLIENT_SECRET`  | optional | Same as above                                                   |
+| `TIKTOK_CLIENT_KEY`     | optional | TikTok OAuth client key for live publishing                     |
+| `TIKTOK_CLIENT_SECRET`  | optional | TikTok OAuth client secret                                      |
 | `RENDER_BASE_URL`       | optional | Public base URL of a clip renderer for live uploads             |
 | `PORT` / `HOSTNAME`     | optional | Listen address (defaults `3000` / `0.0.0.0`)                    |
 
-Without TikTok keys, the publisher runs in **sandbox mode**: full queue UX, simulated uploads — perfect for demos.
+TikTok publishing stays unavailable until API credentials and a public MP4 renderer are configured. Uploads are never simulated.
 
 ---
 

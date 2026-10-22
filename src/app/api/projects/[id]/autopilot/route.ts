@@ -31,7 +31,10 @@ export async function POST(
     const conn = await getActiveConnection();
     if (!conn) {
       return NextResponse.json(
-        { error: "not_connected", message: "Connect TikTok first." },
+        {
+          error: "not_connected",
+          message: "Configure TikTok API credentials and authorize an account first.",
+        },
         { status: 409 },
       );
     }
