@@ -1,0 +1,24 @@
+[Unit]
+Description=KLYP — AI YouTube clipper (Next.js)
+Documentation=https://example.invalid/klyp
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=klyp
+Group=klyp
+WorkingDirectory=/opt/klyp
+EnvironmentFile=/opt/klyp/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

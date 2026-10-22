@@ -1,0 +1,57 @@
+# KLYP full-stack: PostgreSQL + one-shot migration + Next.js app.
+#
+#   cp .env.example .env        # adjust secrets if you like
+#   docker compose up -d --build
+#   open http://localhost:3000
+#
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      # expose only if you need external DB access
+      - "${DB_PORT:-5432}:5432"
+
+  migrate:
+    # Runs `drizzle-kit push` once against the fresh database, then exits.
+    build:
+      context: .
+      target: builder # builder stage has full source + drizzle-kit
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/app_db}
+    command: ["npx", "drizzle-kit", "push", "--force"]
+
+  app:
+    build:
+      context: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/app_db}
+      # Optional — enables live TikTok mode (otherwise sandbox):
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+      # Optional — public base URL of your clip renderer for live uploads:
+      RENDER_BASE_URL: ${RENDER_BASE_URL:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  pgdata:

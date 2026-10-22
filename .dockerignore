@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose.yml
+DEPLOY.md
+deploy
+scripts/gen-icons.mjs
+*.log
+.env
+.env.*
+!.env.example
+.vercel
+.vscode
+coverage
