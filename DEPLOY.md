@@ -75,6 +75,7 @@ Any Node host that supports `npm run build && npm start` plus a `DATABASE_URL` w
 | Variable                | Required | Purpose                                                        |
 | ----------------------- | -------- | -------------------------------------------------------------- |
 | `DATABASE_URL`          | ✅       | PostgreSQL connection string                                    |
+| `CLOUDCONVERT_API_KEY`  | optional | Enables automatic clip rendering from public MP4 source URLs    |
 | `TIKTOK_CLIENT_KEY`     | optional | TikTok OAuth client key for live publishing                     |
 | `TIKTOK_CLIENT_SECRET`  | optional | TikTok OAuth client secret                                      |
 | `RENDER_BASE_URL`       | optional | Public base URL of a clip renderer for live uploads             |

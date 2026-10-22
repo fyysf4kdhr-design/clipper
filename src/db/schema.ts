@@ -32,6 +32,7 @@ export const connections = pgTable("connections", {
 export const projects = pgTable("projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   url: text("url").notNull(),
+  sourceMediaUrl: text("source_media_url"),
   videoId: varchar("video_id", { length: 32 }).notNull(),
   title: text("title").notNull(),
   channel: text("channel").notNull(),
@@ -62,6 +63,7 @@ export const clips = pgTable("clips", {
   score: integer("score").notNull(),
   hashtags: text("hashtags").array().notNull(),
   captions: jsonb("captions").$type<Caption[]>().notNull(),
+  renderJobId: text("render_job_id"),
   exported: boolean("exported").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()

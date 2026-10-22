@@ -21,6 +21,7 @@ export default function ClipInput({
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ export default function ClipInput({
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: value }),
+        body: JSON.stringify({ url: value, mediaUrl }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -53,6 +54,31 @@ export default function ClipInput({
 
   return (
     <div className="w-full">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <label
+          htmlFor="clip-source-media-url"
+          className="font-mono text-[10px] uppercase tracking-widest text-mute"
+        >
+          Direct MP4 source for automatic clip rendering
+        </label>
+        <a
+          href="https://cloudconvert.com/mp4-converter"
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-[10px] uppercase tracking-widest text-holo transition-colors hover:text-cream"
+        >
+          CloudConvert MP4 converter ↗
+        </a>
+      </div>
+      <input
+        id="clip-source-media-url"
+        type="url"
+        value={mediaUrl}
+        onChange={(e) => setMediaUrl(e.target.value)}
+        placeholder="https://media.example.com/source.mp4"
+        spellCheck={false}
+        className="mb-3 h-10 w-full rounded-xl border border-line-2 bg-panel/70 px-4 font-mono text-xs text-cream outline-none transition-colors placeholder:text-mute/70 focus:border-holo/50"
+      />
       <form
         onSubmit={(e) => {
           e.preventDefault();

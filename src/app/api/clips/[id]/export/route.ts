@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { clips } from "@/db/schema";
+import { getClipRender } from "@/lib/cloudconvert";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,20 +17,46 @@ export async function GET(
     return NextResponse.json({ error: "Clip not found" }, { status: 404 });
   }
 
-  const renderBaseUrl = process.env.RENDER_BASE_URL;
-  if (!renderBaseUrl) {
-    return NextResponse.json(
-      { error: "MP4 renderer is not configured. Set RENDER_BASE_URL to save video clips." },
-      { status: 503 },
-    );
+  let videoUrl: string;
+  if (clip.renderJobId) {
+    if (clip.renderJobId === "creating") {
+      return NextResponse.json(
+        { error: "The clip is being sent to CloudConvert. Try again shortly." },
+        { status: 409 },
+      );
+    }
+    if (clip.renderJobId.startsWith("failed:")) {
+      return NextResponse.json(
+        { error: clip.renderJobId.slice("failed:".length) },
+        { status: 502 },
+      );
+    }
+
+    const render = await getClipRender(clip.renderJobId);
+    if (render.error) {
+      return NextResponse.json({ error: render.error }, { status: 502 });
+    }
+    if (render.pending || !render.url) {
+      return NextResponse.json(
+        { error: "CloudConvert is still rendering this clip. Try again shortly." },
+        { status: 409 },
+      );
+    }
+    videoUrl = render.url;
+  } else {
+    const renderBaseUrl = process.env.RENDER_BASE_URL;
+    if (!renderBaseUrl) {
+      return NextResponse.json(
+        { error: "Add a public MP4 source URL and configure CLOUDCONVERT_API_KEY to render clips automatically." },
+        { status: 503 },
+      );
+    }
+    videoUrl = `${renderBaseUrl.replace(/\/$/, "")}/${clip.id}.mp4`;
   }
 
   let rendered: Response;
   try {
-    rendered = await fetch(
-      `${renderBaseUrl.replace(/\/$/, "")}/${clip.id}.mp4`,
-      { signal: AbortSignal.timeout(60_000) },
-    );
+    rendered = await fetch(videoUrl, { signal: AbortSignal.timeout(60_000) });
   } catch {
     return NextResponse.json(
       { error: "Could not reach the MP4 renderer." },

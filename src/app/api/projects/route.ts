@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { url?: string };
+  let body: { url?: string; mediaUrl?: string };
   try {
     body = await req.json();
   } catch {
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
   }
 
   const url = (body.url ?? "").toString();
+  const mediaUrl = (body.mediaUrl ?? "").trim();
   const videoId = extractVideoId(url);
   if (!videoId) {
     return NextResponse.json(
@@ -75,12 +76,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (mediaUrl) {
+    try {
+      const parsed = new URL(mediaUrl);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+        throw new Error("invalid media URL");
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Source media must be a valid public HTTPS URL." },
+        { status: 422 },
+      );
+    }
+  }
+
   const meta = await fetchVideoMeta(videoId);
 
   const [project] = await db
     .insert(projects)
     .values({
       url: url.startsWith("http") ? url : `https://www.youtube.com/watch?v=${videoId}`,
+      sourceMediaUrl: mediaUrl || null,
       videoId: meta.videoId,
       title: meta.title,
       channel: meta.channel,

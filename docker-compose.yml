@@ -33,6 +33,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/app_db}
+      CLOUDCONVERT_API_KEY: ${CLOUDCONVERT_API_KEY:-}
     command: ["npx", "drizzle-kit", "push", "--force"]
 
   app:

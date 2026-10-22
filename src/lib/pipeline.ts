@@ -1,9 +1,10 @@
 import { createHash } from "crypto";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { clips, projects, type Clip, type Project } from "@/db/schema";
 import { analyzeVideo } from "./analysis";
 import { autoQueueForProject } from "./publishing";
+import { createClipRenderJob } from "./cloudconvert";
 
 export const PIPELINE_MS = 16000;
 
@@ -115,6 +116,42 @@ export async function finalizeProjectIfReady(
     .update(projects)
     .set({ status: "done" })
     .where(eq(projects.id, project.id));
+
+  if (project.sourceMediaUrl && process.env.CLOUDCONVERT_API_KEY) {
+    const projectClips = await db
+      .select()
+      .from(clips)
+      .where(eq(clips.projectId, project.id));
+    await Promise.all(
+      projectClips.map(async (clip) => {
+        const [claimed] = await db
+          .update(clips)
+          .set({ renderJobId: "creating" })
+          .where(and(eq(clips.id, clip.id), isNull(clips.renderJobId)))
+          .returning({ id: clips.id });
+        if (!claimed) return;
+
+        try {
+          const jobId = await createClipRenderJob(
+            project.sourceMediaUrl!,
+            clip.id,
+            clip.startSeconds,
+            clip.endSeconds,
+          );
+          await db
+            .update(clips)
+            .set({ renderJobId: jobId })
+            .where(eq(clips.id, clip.id));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "CloudConvert render failed.";
+          await db
+            .update(clips)
+            .set({ renderJobId: `failed:${message.slice(0, 240)}` })
+            .where(eq(clips.id, clip.id));
+        }
+      }),
+    );
+  }
 
   // Autopilot: queue qualifying clips for TikTok the moment they exist.
   await autoQueueForProject(project.id).catch(() => 0);
