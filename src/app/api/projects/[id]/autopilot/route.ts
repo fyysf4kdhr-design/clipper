@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { autoQueueForProject, getActiveConnection } from "@/lib/publishing";
+import { getTikTokConfig } from "@/lib/tiktok";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,8 +29,27 @@ export async function POST(
   const minScore = Math.min(99, Math.max(50, Math.round(body.minScore ?? 85)));
 
   if (enabled) {
+    if (getTikTokConfig().mode !== "live") {
+      return NextResponse.json(
+        {
+          error: "tiktok_not_configured",
+          message: "Configure TikTok API credentials before enabling autopilot.",
+        },
+        { status: 503 },
+      );
+    }
+    if (!process.env.RENDER_BASE_URL) {
+      return NextResponse.json(
+        {
+          error: "renderer_not_configured",
+          message: "Configure RENDER_BASE_URL before enabling autopilot.",
+        },
+        { status: 503 },
+      );
+    }
+
     const conn = await getActiveConnection();
-    if (!conn) {
+    if (!conn?.accessToken) {
       return NextResponse.json(
         {
           error: "not_connected",

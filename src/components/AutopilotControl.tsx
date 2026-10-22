@@ -50,7 +50,7 @@ export default function AutopilotControl({
         if (d.connection) setHandle(d.connection.handle);
         else {
           setEnabled(false);
-          flash("could not connect TikTok");
+          flash(d.message ?? "could not connect TikTok");
           return;
         }
       }

@@ -36,6 +36,8 @@ export default function ClipModal({
 }) {
   const [time, setTime] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [savingMp4, setSavingMp4] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showTikTok, setShowTikTok] = useState(false);
   const len = clip ? clip.endSeconds - clip.startSeconds : 1;
@@ -117,6 +119,31 @@ export default function ClipModal({
       setTimeout(() => setCopied(false), 1600);
     } catch {
       /* clipboard unavailable */
+    }
+  };
+
+  const saveMp4 = async () => {
+    if (!clip || savingMp4) return;
+    setSavingMp4(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(`/api/clips/${clip.id}/export`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setSaveError(data.error ?? "Could not save this MP4.");
+        return;
+      }
+      const video = await response.blob();
+      const url = URL.createObjectURL(video);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `klyp-clip-${String(clip.idx).padStart(2, "0")}.mp4`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setSaveError("Could not save this MP4. Check the renderer and try again.");
+    } finally {
+      setSavingMp4(false);
     }
   };
 
@@ -229,6 +256,18 @@ export default function ClipModal({
                 {/* actions */}
                 <div className="mt-6 flex flex-wrap gap-2.5">
                   <button
+                    onClick={saveMp4}
+                    disabled={savingMp4}
+                    className="btn-acid h-10 px-5 text-sm"
+                  >
+                    {savingMp4 ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : (
+                      <Download className="size-4" />
+                    )}
+                    {savingMp4 ? "Saving MP4…" : "Save MP4"}
+                  </button>
+                  <button
                     onClick={exportClip}
                     disabled={exporting || exported}
                     className="btn-acid h-10 px-5 text-sm"
@@ -266,6 +305,11 @@ export default function ClipModal({
                     <ExternalLink className="size-4" /> Open at timestamp
                   </a>
                 </div>
+                {saveError && (
+                  <p role="alert" className="mt-3 text-sm text-ember">
+                    {saveError}
+                  </p>
+                )}
 
                 {/* captions list */}
                 <div className="mt-7 border-t border-line pt-5">

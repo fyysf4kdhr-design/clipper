@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { clips, publishJobs } from "@/db/schema";
-import { getTikTokConfig, liveInitPost } from "@/lib/tiktok";
-import { getActiveConnection } from "@/lib/publishing";
+import { getTikTokConfig } from "@/lib/tiktok";
+import { getActiveConnection, startLivePublishJob } from "@/lib/publishing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,28 +112,6 @@ export async function POST(
     })
     .returning();
 
-  try {
-    const publishId = await liveInitPost(conn.accessToken ?? "", {
-      title: `${caption} ${hashtags.map((h) => `#${h}`).join(" ")}`.slice(
-        0,
-        2200,
-      ),
-      privacyLevel,
-      videoUrl: `${renderBaseUrl.replace(/\/$/, "")}/${clip.id}.mp4`,
-    });
-    const [updated] = await db
-      .update(publishJobs)
-      .set({ publishId, status: "uploading", progress: 50, updatedAt: new Date() })
-      .where(eq(publishJobs.id, job.id))
-      .returning();
-    return NextResponse.json({ job: updated }, { status: 201 });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "publish init failed";
-    const [failed] = await db
-      .update(publishJobs)
-      .set({ status: "failed", error: message, updatedAt: new Date() })
-      .where(eq(publishJobs.id, job.id))
-      .returning();
-    return NextResponse.json({ job: failed }, { status: 201 });
-  }
+  const started = await startLivePublishJob(job, clip, conn);
+  return NextResponse.json({ job: started }, { status: 201 });
 }

@@ -5,10 +5,11 @@ import {
   connections,
   projects,
   publishJobs,
+  type Clip,
   type Connection,
   type PublishJob,
 } from "@/db/schema";
-import { liveStatusCheck, getTikTokConfig } from "./tiktok";
+import { liveInitPost, liveStatusCheck, getTikTokConfig } from "./tiktok";
 
 const ACTIVE_STATUSES = ["queued", "uploading"];
 
@@ -141,15 +142,50 @@ export async function advanceJob(
   return job;
 }
 
+export async function startLivePublishJob(
+  job: PublishJob,
+  clip: Clip,
+  connection: Connection,
+): Promise<PublishJob> {
+  try {
+    const renderBaseUrl = process.env.RENDER_BASE_URL;
+    if (!renderBaseUrl || !connection.accessToken) {
+      throw new Error("TikTok credentials and a public MP4 renderer are required.");
+    }
+
+    const title = `${job.caption} ${job.hashtags.map((tag) => `#${tag}`).join(" ")}`.slice(0, 2200);
+    const publishId = await liveInitPost(connection.accessToken, {
+      title,
+      privacyLevel: job.privacyLevel,
+      videoUrl: `${renderBaseUrl.replace(/\/$/, "")}/${clip.id}.mp4`,
+    });
+    const [uploading] = await db
+      .update(publishJobs)
+      .set({ publishId, status: "uploading", progress: 50, updatedAt: new Date() })
+      .where(eq(publishJobs.id, job.id))
+      .returning();
+    return uploading ?? job;
+  } catch (cause) {
+    const error = cause instanceof Error ? cause.message : "TikTok upload could not start.";
+    const [failed] = await db
+      .update(publishJobs)
+      .set({ status: "failed", error, updatedAt: new Date() })
+      .where(eq(publishJobs.id, job.id))
+      .returning();
+    return failed ?? job;
+  }
+}
+
 /** Queue every eligible clip of a project that isn't already posted/active. */
 export async function autoQueueForProject(projectId: string): Promise<number> {
+  if (getTikTokConfig().mode !== "live" || !process.env.RENDER_BASE_URL) return 0;
   const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
   if (!p?.autoPostMinScore || !p.autoPostConnectionId) return 0;
   const [conn] = await db
     .select()
     .from(connections)
     .where(eq(connections.id, p.autoPostConnectionId));
-  if (!conn) return 0;
+  if (!conn || conn.mode !== "live" || !conn.accessToken) return 0;
 
   const eligible = await db
     .select()
@@ -172,7 +208,7 @@ export async function autoQueueForProject(projectId: string): Promise<number> {
   const fresh = eligible.filter((c) => !used.has(c.id));
   if (fresh.length === 0) return 0;
 
-  await db.insert(publishJobs).values(
+  const jobs = await db.insert(publishJobs).values(
     fresh.map((c) => ({
       clipId: c.id,
       connectionId: conn.id,
@@ -181,8 +217,13 @@ export async function autoQueueForProject(projectId: string): Promise<number> {
       privacyLevel: "PUBLIC_TO_EVERYONE",
       autoQueued: true,
     })),
-  );
-  return fresh.length;
+  ).returning();
+
+  for (const job of jobs) {
+    const clip = fresh.find((candidate) => candidate.id === job.clipId);
+    if (clip) await startLivePublishJob(job, clip, conn);
+  }
+  return jobs.length;
 }
 
 function serializeJobRow(
